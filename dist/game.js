@@ -31,6 +31,8 @@ const els = {
 function activePlayers() { return state.players.filter(p => !p.folded && (p.stack > 0 || p.totalContribution > 0)); }
 function livePlayers() { return state.players.filter(p => !p.folded); }
 function potSize() { return state.players.reduce((sum, p) => sum + p.totalContribution, 0); }
+function money(amount) { return `$${Number(amount).toLocaleString("en-US")}`; }
+function signedMoney(amount) { return `${amount >= 0 ? "+" : "−"}$${Math.abs(amount).toLocaleString("en-US")}`; }
 function nextSeat(from, predicate = () => true) {
   for (let step = 1; step <= state.players.length; step++) {
     const seat = (from + step) % state.players.length;
@@ -65,14 +67,16 @@ function render() {
     const show = p.human || state.reveal;
     const cards = p.hand.length ? p.hand.map(c => cardHTML(c, !show)).join("") : "";
     const badge = positionLabel(p.seat);
-    seat.innerHTML = `<div class="cards">${cards}</div><div class="player-box"><div class="player-name">${p.name}${badge ? `<span class="position-badge">${badge}</span>` : ""}</div><div class="stack">${p.stack} chips${p.allIn ? " · ALL IN" : ""}</div>${p.streetBet ? `<div class="seat-bet">Bet ${p.streetBet}</div>` : ""}</div>`;
+    const turn = state.actor === p.seat && !state.handOver;
+    const betChips = p.streetBet ? `<div class="seat-bet" aria-label="${p.name} has ${money(p.streetBet)} in front"><span class="chip-stack" aria-hidden="true"><i></i><i></i><i></i></span><strong>${money(p.streetBet)}</strong></div>` : "";
+    seat.innerHTML = `<div class="cards">${cards}</div><div class="player-box"><div class="player-name">${p.name}${badge ? `<span class="position-badge">${badge}</span>` : ""}${turn ? `<span class="turn-indicator">Action</span>` : ""}</div><div class="stack">${money(p.stack)}${p.allIn ? " · ALL IN" : ""}</div>${p.lastAction ? `<div class="last-action">${p.lastAction}</div>` : ""}${betChips}</div>`;
   }
-  els.pot.textContent = potSize();
+  els.pot.textContent = money(potSize());
   els.board.innerHTML = state.board.map(c => cardHTML(c)).join("");
   els.street.textContent = state.street[0].toUpperCase() + state.street.slice(1);
   els.hands.textContent = state.handNumber;
   const delta = state.players[0].stack - state.startStack;
-  els.sessionResult.textContent = `${delta >= 0 ? "+" : ""}${(delta / BB).toFixed(1)} BB`;
+  els.sessionResult.textContent = signedMoney(delta);
   updateControls();
 }
 
@@ -90,7 +94,7 @@ function updateControls() {
   const checkCall = els.buttons.querySelector('[data-action="checkcall"]');
   const betRaise = els.buttons.querySelector('[data-action="betraise"]');
   fold.disabled = toCall === 0;
-  checkCall.textContent = toCall ? `Call ${Math.min(toCall, p.stack)}` : "Check";
+  checkCall.textContent = toCall ? `Call ${money(Math.min(toCall, p.stack))}` : "Check";
   const minTo = state.currentBet ? state.currentBet + state.minRaise : BB;
   const maxTo = p.streetBet + p.stack;
   const canRaise = maxTo > state.currentBet;
@@ -99,9 +103,9 @@ function updateControls() {
   els.betControl.classList.toggle("hidden", !canRaise);
   const practicalMin = Math.min(minTo, maxTo);
   els.range.min = practicalMin; els.range.max = maxTo; els.range.value = Math.min(Math.max(Number(els.range.value), practicalMin), maxTo);
-  els.input.min = practicalMin; els.input.max = maxTo; els.input.value = els.range.value; els.betValue.textContent = els.range.value;
+  els.input.min = practicalMin; els.input.max = maxTo; els.input.value = els.range.value; els.betValue.textContent = money(els.range.value);
   els.eyebrow.textContent = "YOUR ACTION";
-  els.message.textContent = toCall ? `${toCall} to call · Pot ${potSize()}` : `Check or bet · Pot ${potSize()}`;
+  els.message.textContent = toCall ? `${money(toCall)} to call · Pot ${money(potSize())}` : `Check or bet · Pot ${money(potSize())}`;
 }
 
 function commit(p, amount) {
@@ -119,7 +123,7 @@ function startHand() {
   state.handOver = false; state.reveal = false; state.board = []; state.street = "preflop"; state.currentBet = BB; state.minRaise = BB; state.handDecisions = [];
   for (const p of state.players) {
     if (p.stack < BB) p.stack = BUY_IN;
-    Object.assign(p, { hand: [], folded: false, allIn: false, streetBet: 0, totalContribution: 0 });
+    Object.assign(p, { hand: [], folded: false, allIn: false, streetBet: 0, totalContribution: 0, lastAction: "" });
   }
   state.deck = createDeck();
   state.dealer = nextSeat(state.dealer, p => p.stack > 0);
@@ -174,9 +178,9 @@ function applyAction(seat, action) {
   const toCall = Math.max(0, state.currentBet - p.streetBet);
   const before = { street: state.street, toCall, pot: potSize(), currentBet: state.currentBet, position: positionName(seat), active: livePlayers().length };
   let aggressive = false, label = "";
-  if (action.type === "fold") { if (!toCall) return false; p.folded = true; label = "folded"; }
-  else if (action.type === "check") { if (toCall) return false; label = "checked"; }
-  else if (action.type === "call") { if (!toCall) return applyAction(seat, { type: "check" }); const paid = commit(p, toCall); label = `called ${paid}`; }
+  if (action.type === "fold") { if (!toCall) return false; p.folded = true; label = "Fold"; }
+  else if (action.type === "check") { if (toCall) return false; label = "Check"; }
+  else if (action.type === "call") { if (!toCall) return applyAction(seat, { type: "check" }); const paid = commit(p, toCall); label = `Call ${money(paid)}`; }
   else if (action.type === "raise") {
     const maxTo = p.streetBet + p.stack;
     let target = Math.max(0, Math.min(Math.round(action.target), maxTo));
@@ -187,7 +191,7 @@ function applyAction(seat, action) {
     commit(p, target - p.streetBet);
     const raiseSize = target - oldBet;
     if (raiseSize >= state.minRaise) state.minRaise = raiseSize;
-    state.currentBet = target; aggressive = true; label = `${oldBet ? "raised to" : "bet"} ${target}`;
+    state.currentBet = target; aggressive = true; label = `${oldBet ? "Raise to" : "Bet"} ${money(target)}`;
   } else return false;
 
   if (p.human) coachDecision(p, action, before);
@@ -205,7 +209,7 @@ function advanceStreet() {
   const next = { preflop: "flop", flop: "turn", turn: "river" }[state.street];
   state.street = next;
   if (next === "flop") state.board.push(state.deck.pop(), state.deck.pop(), state.deck.pop()); else state.board.push(state.deck.pop());
-  for (const p of state.players) p.streetBet = 0;
+  for (const p of state.players) { p.streetBet = 0; p.lastAction = ""; }
   state.currentBet = 0; state.minRaise = BB;
   state.pending = new Set(state.players.filter(p => !p.folded && !p.allIn).map(p => p.seat));
   state.actor = nextSeat(state.dealer, p => state.pending.has(p.seat));
@@ -220,8 +224,8 @@ function runoutAndShowdown() {
   for (const p of state.players) { p.stack += settled.payouts[p.seat] || 0; p.streetBet = 0; }
   const winningSeats = [...new Set(settled.pots.flatMap(p => p.winners))];
   const summary = settled.pots.length === 1
-    ? `${winningSeats.map(s => state.players[s].name).join(" & ")} won ${settled.pots[0].amount} with ${settled.pots[0].hand.toLowerCase()}.`
-    : `${settled.pots.length} pots were awarded: ${settled.pots.map(p => `${p.amount} to ${p.winners.map(s => state.players[s].name).join(" & ")}`).join("; ")}.`;
+    ? `${winningSeats.map(s => state.players[s].name).join(" & ")} won ${money(settled.pots[0].amount)} with ${settled.pots[0].hand.toLowerCase()}.`
+    : `${settled.pots.length} pots were awarded: ${settled.pots.map(p => `${money(p.amount)} to ${p.winners.map(s => state.players[s].name).join(" & ")}`).join("; ")}.`;
   finishHand(summary);
 }
 
@@ -229,7 +233,7 @@ function awardUncontested() {
   const winner = livePlayers()[0], pot = potSize();
   winner.stack += pot;
   for (const p of state.players) p.streetBet = 0;
-  finishHand(`${winner.name} won ${pot} chips without a showdown.`);
+  finishHand(`${winner.name} won ${money(pot)} without a showdown.`);
 }
 
 function finishHand(summary) {
@@ -287,7 +291,7 @@ function coachDecision(p, action, context) {
     else { grade = "Reasonable"; explanation = "The aggressive line can win immediately and build the pot when called, but a smaller-pot line was also available."; }
     if (context.pot && added > context.pot * 1.35) { stats.overbets++; if (grade === "Good") grade = "Reasonable"; explanation += " The size is large relative to the pot, so make sure worse hands can still call."; }
   }
-  const decision = { street: state.street, action: action.type === "raise" ? `${context.currentBet ? "Raise" : "Bet"} to ${action.target}` : action.type[0].toUpperCase() + action.type.slice(1), grade, explanation };
+  const decision = { street: state.street, action: action.type === "raise" ? `${context.currentBet ? "Raise" : "Bet"} to ${money(action.target)}` : action.type[0].toUpperCase() + action.type.slice(1), grade, explanation };
   state.handDecisions.push(decision); state.decisions.push(decision);
 }
 
@@ -336,8 +340,8 @@ function resetSession() {
   els.dialog.close(); renderTendencies(); startHand();
 }
 
-els.range.addEventListener("input", () => { els.input.value = els.range.value; els.betValue.textContent = els.range.value; });
-els.input.addEventListener("input", () => { const value = Math.max(Number(els.input.min), Math.min(Number(els.input.max), Number(els.input.value))); els.range.value = value; els.betValue.textContent = value; });
+els.range.addEventListener("input", () => { els.input.value = els.range.value; els.betValue.textContent = money(els.range.value); });
+els.input.addEventListener("input", () => { const value = Math.max(Number(els.input.min), Math.min(Number(els.input.max), Number(els.input.value))); els.range.value = value; els.betValue.textContent = money(value); });
 els.buttons.addEventListener("click", event => {
   const type = event.target.dataset.action; if (!type || state.actor !== 0) return;
   const p = state.players[0], toCall = Math.max(0, state.currentBet - p.streetBet);
