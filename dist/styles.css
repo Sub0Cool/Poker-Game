@@ -48,7 +48,11 @@ main { display: grid; grid-template-columns: minmax(680px, 1fr) 360px; min-heigh
 .card.red { color: #c93c38; }
 .card.back { color: transparent; border: 2px solid #e4d8b5; background: repeating-linear-gradient(45deg, #233f55 0 4px, #1a3043 4px 8px); }
 .last-action { height: 13px; margin-top: 3px; color: #aebdb7; font-size: .66rem; font-weight: 700; }
-.seat-bet { position: absolute; left: 50%; top: -38px; display: flex; align-items: center; gap: 6px; transform: translateX(-50%); padding: 4px 8px 4px 5px; border: 1px solid rgba(240,201,107,.25); border-radius: 12px; background: #071512ee; color: var(--gold); font-size: .75rem; white-space: nowrap; box-shadow: 0 4px 12px #0007; }
+.seat-bet { position: absolute; left: 50%; top: -38px; z-index: 4; display: flex; align-items: center; gap: 6px; transform: translateX(-50%); padding: 4px 8px 4px 5px; border: 1px solid rgba(240,201,107,.25); border-radius: 12px; background: #071512ee; color: var(--gold); font-size: .75rem; white-space: nowrap; box-shadow: 0 4px 12px #0007; }
+/* Push wagers inward onto the felt instead of covering hole cards. */
+.seat-0 .seat-bet { top: -101px; }
+.seat-1 .seat-bet { left: 118%; top: -56px; }
+.seat-5 .seat-bet { left: -18%; top: -56px; }
 .seat-3 .seat-bet, .seat-2 .seat-bet, .seat-4 .seat-bet { top: auto; bottom: -39px; }
 .chip-stack { position: relative; display: inline-block; width: 18px; height: 17px; }
 .chip-stack i { position: absolute; left: 1px; width: 16px; height: 7px; border: 2px dashed #f7df99; border-radius: 50%; background: #a9252c; box-shadow: inset 0 0 0 1px #66161c; }
