@@ -10,13 +10,36 @@ const styles = [null,
   { name: "Loose", looseness: .14, aggression: .55 },
   { name: "Balanced", looseness: 0, aggression: .6 }
 ];
+const positionNames = { utg: "Under the gun", mp: "Middle position", co: "Cutoff", btn: "Button", sb: "Small blind", bb: "Big blind" };
+const drillNames = { position: "Preflop position play", value: "Strong hand & value betting", bluff: "Bluff or give up?" };
+const positionDealers = { utg: 3, mp: 2, co: 1, btn: 0, sb: 5, bb: 4 };
+const positionHands = {
+  strong: [["As","Ah"],["Ks","Kh"],["As","Ks"],["Qh","Qd"],["Ad","Kd"]],
+  medium: [["9s","9h"],["Ah","Jd"],["Ks","Qs"],["8h","8c"],["Ac","Tc"]],
+  weak: [["7c","2d"],["9h","4s"],["Jc","6d"],["8s","3c"],["Td","5h"]]
+};
+const valueScenarios = [
+  { hand: ["As","Ah"], board: ["Kd","7c","2h","4s","Jc"], note: "an overpair" },
+  { hand: ["Kh","Qh"], board: ["Ks","8d","3c","2s","9d"], note: "top pair with a strong kicker" },
+  { hand: ["8s","8h"], board: ["8d","Qc","2c","4h","Jd"], note: "a set" },
+  { hand: ["Ah","Kh"], board: ["Ad","7s","3d","6c","Qs"], note: "top pair, top kicker" }
+];
+const bluffScenarios = [
+  { hand: ["As","Qh"], board: ["Kc","7d","2s","4h","Jc"], plan: "bluff", note: "overcards and useful blockers" },
+  { hand: ["Ac","5c"], board: ["Kd","8s","3c","2h","Qd"], plan: "bluff", note: "a wheel draw and an ace blocker" },
+  { hand: ["8c","3d"], board: ["Ah","Kh","Qh","9s","2c"], plan: "giveup", note: "almost no showdown value or helpful blockers" },
+  { hand: ["7c","2d"], board: ["Js","Td","9s","Kc","4h"], plan: "giveup", note: "poor blockers on a connected board" }
+];
 
 const state = {
   players: names.map((name, seat) => ({ name, seat, human: seat === 0, style: styles[seat], stack: BUY_IN, hand: [], folded: false, allIn: false, streetBet: 0, totalContribution: 0 })),
   deck: [], board: [], dealer: 5, smallBlind: null, bigBlind: null, street: "preflop", currentBet: 0, minRaise: BB,
   actor: null, pending: new Set(), handOver: true, reveal: false, handNumber: 0, token: 0,
   decisions: [], handDecisions: [], startStack: BUY_IN,
-  stats: { decisions: 0, preflop: 0, vpip: 0, limps: 0, calls: 0, raises: 0, folds: 0, postflopPassive: 0, overbets: 0, missedValue: 0 }
+  stats: { decisions: 0, preflop: 0, vpip: 0, limps: 0, calls: 0, raises: 0, folds: 0, postflopPassive: 0, overbets: 0, missedValue: 0 },
+  mode: "cash", scenario: null,
+  practiceConfig: { drill: "position", position: "random", street: "preflop", stackBB: 100, difficulty: "beginner" },
+  practiceStats: { attempts: 0, good: 0, reasonable: 0, questionable: 0, mistakes: 0 }
 };
 
 const $ = selector => document.querySelector(selector);
@@ -25,6 +48,9 @@ const els = {
   buttons: $("#action-buttons"), betControl: $("#bet-control"), range: $("#bet-range"), input: $("#bet-input"), betValue: $("#bet-value"),
   coach: $("#coach-live"), review: $("#review"), list: $("#decision-list"), result: $("#hand-result"), next: $("#next-hand"),
   tendencies: $("#tendency-list"), decisionCount: $("#decision-count"), hands: $("#hands-played"), sessionResult: $("#session-result"),
+  handsLabel: $("#hands-label"), resultLabel: $("#result-label"), tendencyTitle: $("#tendency-title"), reviewTitle: $("#review-title-label"), practiceSummary: $("#practice-summary"),
+  cashMode: $("#cash-mode"), practiceMode: $("#practice-mode"), practiceDialog: $("#practice-dialog"), practiceForm: $("#practice-form"),
+  practiceDrill: $("#practice-drill"), practicePosition: $("#practice-position"), practiceStreet: $("#practice-street"), practiceStack: $("#practice-stack"), practiceDifficulty: $("#practice-difficulty"),
   dialog: $("#session-dialog"), report: $("#session-report")
 };
 
@@ -54,6 +80,7 @@ function cardHTML(card, hidden = false) {
 }
 
 function positionLabel(seat) {
+  if (state.mode === "practice" && seat === 0 && state.scenario) return state.scenario.position.toUpperCase();
   if (seat === state.dealer) return "D";
   if (seat === state.smallBlind) return "SB";
   if (seat === state.bigBlind) return "BB";
@@ -75,8 +102,13 @@ function render() {
   els.board.innerHTML = state.board.map(c => cardHTML(c)).join("");
   els.street.textContent = state.street[0].toUpperCase() + state.street.slice(1);
   els.hands.textContent = state.handNumber;
-  const delta = state.players[0].stack - state.startStack;
-  els.sessionResult.textContent = signedMoney(delta);
+  if (state.mode === "practice") {
+    const p = state.practiceStats;
+    els.sessionResult.textContent = `${p.good + p.reasonable}/${p.attempts}`;
+  } else {
+    const delta = state.players[0].stack - state.startStack;
+    els.sessionResult.textContent = signedMoney(delta);
+  }
   updateControls();
 }
 
@@ -85,7 +117,7 @@ function updateControls() {
   [...els.buttons.querySelectorAll("button")].forEach(b => b.disabled = !humanTurn);
   if (!humanTurn) {
     els.betControl.classList.add("hidden");
-    if (state.handOver) { els.eyebrow.textContent = "HAND COMPLETE"; els.message.textContent = "Review the hand with your coach."; }
+    if (state.handOver) { els.eyebrow.textContent = state.mode === "practice" ? "SCENARIO COMPLETE" : "HAND COMPLETE"; els.message.textContent = state.mode === "practice" ? "Review the spot with your coach." : "Review the hand with your coach."; }
     if (!state.handOver && state.actor !== null) { els.eyebrow.textContent = "TABLE ACTION"; els.message.textContent = `${state.players[state.actor].name} is thinking…`; }
     return;
   }
@@ -118,6 +150,10 @@ function commit(p, amount) {
 function postBlind(seat, amount) { commit(state.players[seat], amount); }
 
 function startHand() {
+  if (state.mode === "practice") startPracticeScenario(); else startCashHand();
+}
+
+function startCashHand() {
   state.token++;
   state.handNumber++;
   state.handOver = false; state.reveal = false; state.board = []; state.street = "preflop"; state.currentBet = BB; state.minRaise = BB; state.handDecisions = [];
@@ -134,8 +170,88 @@ function startHand() {
   state.pending = new Set(state.players.filter(p => !p.allIn).map(p => p.seat));
   state.actor = nextSeat(state.bigBlind, p => state.pending.has(p.seat));
   els.review.classList.add("hidden"); els.coach.classList.remove("hidden");
+  els.practiceSummary.classList.add("hidden"); els.next.textContent = "Deal next hand";
   els.coach.innerHTML = `<p>Recommendations stay hidden until the hand is over. Focus on position, the price you’re getting, and what worse hands can continue.</p>`;
   render(); runActor();
+}
+
+function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
+
+function dealRiggedCards(heroHand, boardCards) {
+  state.deck = createDeck().filter(card => !heroHand.includes(card) && !boardCards.includes(card));
+  state.players[0].hand = [...heroHand];
+  for (const p of state.players.slice(1)) p.hand = [state.deck.pop(), state.deck.pop()];
+}
+
+function resetPlayersForScenario(stack) {
+  for (const p of state.players) {
+    p.stack = stack;
+    Object.assign(p, { hand: [], folded: false, allIn: false, streetBet: 0, totalContribution: 0, lastAction: "" });
+  }
+}
+
+function resolvedPracticePosition() {
+  return state.practiceConfig.position === "random" ? pick(Object.keys(positionNames)) : state.practiceConfig.position;
+}
+
+function startPracticeScenario() {
+  state.token++;
+  state.handNumber++;
+  state.handOver = false; state.reveal = false; state.handDecisions = []; state.board = [];
+  const config = state.practiceConfig;
+  const position = resolvedPracticePosition();
+  const stack = config.stackBB * BB;
+  resetPlayersForScenario(stack);
+  state.startStack = stack;
+  state.dealer = positionDealers[position];
+  state.smallBlind = nextSeat(state.dealer);
+  state.bigBlind = nextSeat(state.smallBlind);
+  state.minRaise = BB;
+
+  let heroHand, board = [], objective, detail, facingBet = false, category = "";
+  if (config.drill === "position") {
+    category = pick(Object.keys(positionHands));
+    heroHand = pick(positionHands[category]);
+    state.street = "preflop";
+    postBlind(state.smallBlind, 1); postBlind(state.bigBlind, BB);
+    const facingRaise = config.difficulty === "intermediate" ? Math.random() < .55 : Math.random() < .28;
+    if (facingRaise) {
+      const raiser = state.players[3];
+      const extra = Math.max(0, 6 - raiser.streetBet);
+      commit(raiser, extra);
+      raiser.lastAction = `Raise to ${money(6)}`;
+      state.currentBet = 6;
+    } else state.currentBet = BB;
+    objective = "Choose a sound preflop action from your selected position.";
+    detail = facingRaise ? "You are facing an opening raise." : "The action has reached you with no raise yet.";
+    state.scenario = { drill: config.drill, position, category, facingRaise, objective, detail };
+  } else {
+    const template = pick(config.drill === "value" ? valueScenarios : bluffScenarios);
+    heroHand = template.hand;
+    const boardCount = { flop: 3, turn: 4, river: 5 }[config.street] || 3;
+    board = template.board.slice(0, boardCount);
+    state.street = config.street === "preflop" ? "flop" : config.street;
+    state.board = board;
+    const villain = state.players[3];
+    for (const p of state.players.slice(1)) p.folded = p !== villain;
+    commit(state.players[0], 9); commit(villain, 9);
+    state.players[0].streetBet = 0; villain.streetBet = 0;
+    facingBet = Math.random() < (config.difficulty === "intermediate" ? .58 : .34);
+    if (facingBet) { commit(villain, 6); villain.streetBet = 6; villain.lastAction = `Bet ${money(6)}`; state.currentBet = 6; }
+    else { state.currentBet = 0; villain.lastAction = "Check"; }
+    objective = config.drill === "value" ? "Decide how to earn value with a strong made hand." : "Decide whether this is a credible bluff or a spot to give up.";
+    detail = facingBet ? `A single opponent has bet ${money(6)} into you.` : "A single opponent has checked and the action is on you.";
+    state.scenario = { drill: config.drill, position, plan: template.plan, handNote: template.note, facingBet, objective, detail };
+  }
+
+  dealRiggedCards(heroHand, board);
+  state.pending = new Set([0]); state.actor = 0;
+  els.review.classList.add("hidden"); els.coach.classList.remove("hidden");
+  els.coach.innerHTML = `<p>Your recommendation stays hidden until you act. Use position, board texture, likely ranges, and bet sizing to make the decision.</p>`;
+  els.practiceSummary.classList.remove("hidden");
+  els.practiceSummary.innerHTML = `<strong>${drillNames[config.drill]}</strong><span>${positionNames[position]} · ${state.street[0].toUpperCase()+state.street.slice(1)} · ${config.stackBB} BB</span><span>${objective} ${detail}</span>`;
+  els.next.textContent = "Next scenario";
+  render();
 }
 
 function normalizedStrength(p) {
@@ -194,7 +310,15 @@ function applyAction(seat, action) {
     state.currentBet = target; aggressive = true; label = `${oldBet ? "Raise to" : "Bet"} ${money(target)}`;
   } else return false;
 
-  if (p.human) coachDecision(p, action, before);
+  if (p.human) {
+    coachDecision(p, action, before);
+    if (state.mode === "practice") {
+      p.lastAction = label;
+      applyPracticeFeedback(action, before);
+      finishPracticeScenario();
+      return true;
+    }
+  }
   p.lastAction = label;
   state.pending.delete(seat);
   if (aggressive) state.pending = new Set(state.players.filter(q => !q.folded && !q.allIn && q.seat !== seat).map(q => q.seat));
@@ -295,6 +419,61 @@ function coachDecision(p, action, context) {
   state.handDecisions.push(decision); state.decisions.push(decision);
 }
 
+function applyPracticeFeedback(action, context) {
+  const scenario = state.scenario;
+  const decision = state.handDecisions.at(-1);
+  const aggressive = action.type === "raise";
+  let grade = "Reasonable", explanation = "This line can work, though another choice may perform similarly.";
+
+  if (scenario.drill === "position") {
+    if (scenario.category === "strong") {
+      if (aggressive) { grade = "Good"; explanation = `This is a premium starting hand from ${positionNames[scenario.position].toLowerCase()}. Raising builds value and avoids letting several opponents see cards cheaply.`; }
+      else if (action.type === "fold") { grade = "Likely Mistake"; explanation = "This hand is comfortably strong enough to continue. Folding gives up a high-value preflop opportunity."; }
+      else { grade = scenario.facingRaise ? "Reasonable" : "Questionable"; explanation = scenario.facingRaise ? "Calling can keep weaker hands involved, although reraising for value is often attractive." : "The hand is strong enough to raise for value; entering passively may invite too many opponents into the pot."; }
+    } else if (scenario.category === "medium") {
+      const late = ["co","btn"].includes(scenario.position);
+      if (action.type === "fold") { grade = late && !scenario.facingRaise ? "Questionable" : "Reasonable"; explanation = late && !scenario.facingRaise ? "From late position this hand is usually playable because fewer players remain and you will often act later after the flop." : "Folding a medium-strength hand against pressure or from an early seat is a disciplined option."; }
+      else if (aggressive) { grade = late || !scenario.facingRaise ? "Good" : "Reasonable"; explanation = `Aggression uses your ${positionNames[scenario.position].toLowerCase()} position well, although the hand should be handled more carefully when an earlier player has shown strength.`; }
+      else { grade = "Reasonable"; explanation = "Continuing is defensible at this price. Keep in mind that calling sacrifices the chance to win the pot immediately."; }
+    } else {
+      if (action.type === "fold" || action.type === "check") { grade = "Good"; explanation = action.type === "check" ? "Checking your option in the big blind avoids investing more with a weak hand while taking the free flop." : "This weak starting hand is unlikely to make a strong, well-disguised winner. Folding preserves chips for a better opportunity."; }
+      else if (aggressive && ["co","btn"].includes(scenario.position) && !scenario.facingRaise) { grade = "Questionable"; explanation = "Late position creates some steal potential, but this hand is near the bottom of a sensible range. Use this bluff selectively."; }
+      else { grade = "Likely Mistake"; explanation = "The hand is too weak to continue profitably in this situation, especially when opponents can still act or have already raised."; }
+    }
+  } else if (scenario.drill === "value") {
+    if (action.type === "fold") { grade = "Likely Mistake"; explanation = `You hold ${scenario.handNote}, which is far too strong to fold in this single-opponent pot.`; }
+    else if (aggressive) {
+      const added = Math.max(0, Number(action.target) - context.currentBet);
+      const oversized = context.pot && added > context.pot * 1.25;
+      grade = oversized ? "Reasonable" : "Good";
+      explanation = `Betting or raising targets calls from worse hands while protecting against draws. ${oversized ? "The idea is sound, but the large size may make too many weaker hands fold." : "This size keeps weaker hands and draws interested without giving them a free card."}`;
+    } else if (action.type === "call") { grade = "Reasonable"; explanation = `Calling keeps bluffs in and controls the pot with ${scenario.handNote}. Raising can often earn more value, so mix the passive line in rather than always using it.`; }
+    else { grade = "Questionable"; explanation = `Checking can disguise ${scenario.handNote}, but it may miss value from worse pairs and draws. Ask which weaker hands would call a bet.`; }
+  } else {
+    if (scenario.plan === "bluff") {
+      if (aggressive) { grade = "Good"; explanation = `This is a credible bluff candidate because you have ${scenario.handNote}. Your cards reduce some strong combinations the opponent can hold and may improve when called.`; }
+      else if (action.type === "call") { grade = "Questionable"; explanation = "Calling relies on weak showdown value. Turning the hand into a selective bluff or releasing it will usually create a clearer plan."; }
+      else { grade = "Reasonable"; explanation = "Giving up avoids forcing a bluff, but this was one of the better hands in your range to apply pressure with. Bluffing is optional, not mandatory."; }
+    } else {
+      if (action.type === "check" || action.type === "fold") { grade = "Good"; explanation = `Giving up is disciplined here: you have ${scenario.handNote}. Strong bluffing ranges include hands with better blockers or meaningful draws.`; }
+      else if (aggressive) { grade = "Likely Mistake"; explanation = `This bluff has ${scenario.handNote}, so it blocks few strong hands and has little backup equity when called. Save the aggression for a more credible candidate.`; }
+      else { grade = "Questionable"; explanation = "Continuing passively with very little showdown value often postpones the same difficult decision. Folding is usually cleaner."; }
+    }
+  }
+
+  if (state.practiceConfig.difficulty === "intermediate") explanation += " Consider how this action fits the rest of the range you would play the same way.";
+  decision.grade = grade; decision.explanation = explanation;
+  const p = state.practiceStats; p.attempts++;
+  if (grade === "Good") p.good++; else if (grade === "Reasonable") p.reasonable++; else if (grade === "Questionable") p.questionable++; else p.mistakes++;
+}
+
+function finishPracticeScenario() {
+  state.handOver = true; state.actor = null; state.pending.clear();
+  els.result.textContent = `${drillNames[state.scenario.drill]} · ${positionNames[state.scenario.position]}. No showdown is needed—the goal is the decision itself.`;
+  els.coach.classList.add("hidden"); els.review.classList.remove("hidden");
+  renderReview(); renderTendencies(); render();
+}
+
 function renderReview() {
   els.list.innerHTML = state.handDecisions.length ? state.handDecisions.map(d => {
     const cls = d.grade === "Good" ? "good" : d.grade === "Reasonable" ? "reasonable" : d.grade === "Questionable" ? "questionable" : "mistake";
@@ -316,6 +495,19 @@ function tendencyRows() {
 }
 
 function renderTendencies() {
+  if (state.mode === "practice") {
+    const p = state.practiceStats;
+    els.decisionCount.textContent = `${p.attempts} scenario${p.attempts === 1 ? "" : "s"}`;
+    if (!p.attempts) { els.tendencies.innerHTML = `<p class="muted">Your practice results will appear here.</p>`; return; }
+    const strong = p.good + p.reasonable;
+    const focus = p.mistakes ? "Review the red-flag spots" : p.questionable ? "Refine the close decisions" : "Strong decision making";
+    els.tendencies.innerHTML = `
+      <div class="tendency"><span>Good decisions</span><em>${p.good}</em></div>
+      <div class="tendency"><span>Reasonable decisions</span><em>${p.reasonable}</em></div>
+      <div class="tendency"><span>Solid-or-better rate</span><em>${Math.round(strong / p.attempts * 100)}%</em></div>
+      <div class="tendency"><span>Current focus</span><em>${focus}</em></div>`;
+    return;
+  }
   els.decisionCount.textContent = `${state.stats.decisions} decision${state.stats.decisions === 1 ? "" : "s"}`;
   const rows = tendencyRows();
   els.tendencies.innerHTML = rows.length ? rows.map(([a,b]) => `<div class="tendency"><span>${a}</span><em>${b}</em></div>`).join("") : `<p class="muted">Patterns will appear after a few decisions.</p>`;
@@ -334,10 +526,32 @@ function showSessionReport() {
 }
 
 function resetSession() {
+  state.mode = "cash";
   state.token++; state.handNumber = 0; state.decisions = []; state.startStack = BUY_IN;
   state.stats = { decisions: 0, preflop: 0, vpip: 0, limps: 0, calls: 0, raises: 0, folds: 0, postflopPassive: 0, overbets: 0, missedValue: 0 };
   for (const p of state.players) p.stack = BUY_IN;
-  els.dialog.close(); renderTendencies(); startHand();
+  els.dialog.close(); syncModeUI(); renderTendencies(); startHand();
+}
+
+function syncModeUI() {
+  const practice = state.mode === "practice";
+  els.cashMode.classList.toggle("active", !practice);
+  els.practiceMode.classList.toggle("active", practice);
+  els.cashMode.setAttribute("aria-pressed", String(!practice));
+  els.practiceMode.setAttribute("aria-pressed", String(practice));
+  els.handsLabel.textContent = practice ? "Scenarios" : "Hands";
+  els.resultLabel.textContent = practice ? "Solid" : "Result";
+  els.tendencyTitle.textContent = practice ? "Practice progress" : "Session tendencies";
+  els.reviewTitle.textContent = practice ? "Scenario review" : "Hand review";
+  $("#new-session").textContent = practice ? "Practice setup" : "New session";
+  if (!practice) els.practiceSummary.classList.add("hidden");
+}
+
+function selectPracticeDefaults() {
+  const positionDrill = els.practiceDrill.value === "position";
+  els.practiceStreet.disabled = positionDrill;
+  if (positionDrill) els.practiceStreet.value = "preflop";
+  else if (els.practiceStreet.value === "preflop") els.practiceStreet.value = els.practiceDrill.value === "bluff" ? "turn" : "flop";
 }
 
 els.range.addEventListener("input", () => { els.input.value = els.range.value; els.betValue.textContent = money(els.range.value); });
@@ -350,9 +564,27 @@ els.buttons.addEventListener("click", event => {
   if (type === "betraise") applyAction(0, { type: "raise", target: Number(els.input.value) });
 });
 els.next.addEventListener("click", startHand);
-$("#new-session").addEventListener("click", showSessionReport);
+$("#new-session").addEventListener("click", () => state.mode === "practice" ? els.practiceDialog.showModal() : showSessionReport());
 $("#keep-playing").addEventListener("click", () => els.dialog.close());
 $("#reset-session").addEventListener("click", resetSession);
+els.practiceDrill.addEventListener("change", selectPracticeDefaults);
+els.practiceMode.addEventListener("click", () => { selectPracticeDefaults(); if (!els.practiceDialog.open) els.practiceDialog.showModal(); });
+els.cashMode.addEventListener("click", () => {
+  if (state.mode === "cash") return;
+  state.mode = "cash"; state.token++; state.handNumber = 0; state.decisions = []; state.startStack = BUY_IN;
+  state.stats = { decisions: 0, preflop: 0, vpip: 0, limps: 0, calls: 0, raises: 0, folds: 0, postflopPassive: 0, overbets: 0, missedValue: 0 };
+  for (const p of state.players) p.stack = BUY_IN;
+  syncModeUI(); renderTendencies(); startHand();
+});
+$("#cancel-practice").addEventListener("click", () => els.practiceDialog.close());
+els.practiceForm.addEventListener("submit", event => {
+  event.preventDefault();
+  state.mode = "practice";
+  state.practiceConfig = { drill: els.practiceDrill.value, position: els.practicePosition.value, street: els.practiceStreet.value, stackBB: Number(els.practiceStack.value), difficulty: els.practiceDifficulty.value };
+  state.practiceStats = { attempts: 0, good: 0, reasonable: 0, questionable: 0, mistakes: 0 };
+  state.handNumber = 0; state.decisions = [];
+  els.practiceDialog.close(); syncModeUI(); renderTendencies(); startHand();
+});
 
 function registerWebMCP() {
   const context = document.modelContext;
@@ -365,4 +597,5 @@ function registerWebMCP() {
 }
 
 registerWebMCP();
+syncModeUI();
 startHand();

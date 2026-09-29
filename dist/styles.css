@@ -14,11 +14,14 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--ink); background: #09100f; font-size: 16px; }
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 button { color: inherit; }
 .topbar { height: 68px; display: flex; align-items: center; gap: 28px; padding: 0 28px; border-bottom: 1px solid var(--line); background: #0b1211; }
 .brand { display: flex; align-items: center; gap: 10px; font-family: Georgia, serif; font-weight: 700; font-size: 1.25rem; letter-spacing: .02em; }
 .brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #14231f; background: var(--gold); }
+.mode-switch { display: flex; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: #070d0c; }
+.mode-button { padding: 7px 11px; color: var(--muted); border: 0; border-radius: 6px; background: transparent; font-size: .78rem; font-weight: 750; cursor: pointer; }
+.mode-button.active { color: #17201e; background: var(--gold); }
 .session-stats { display: flex; gap: 24px; margin-left: auto; color: var(--muted); font-size: .875rem; }
 .session-stats strong { color: var(--ink); margin-left: 5px; }
 .ghost-button { border: 1px solid var(--line); background: transparent; border-radius: 8px; padding: 9px 13px; cursor: pointer; }
@@ -83,6 +86,9 @@ h1, h2 { margin: 0; font-family: Georgia, serif; }
 h1 { margin-top: 4px; font-size: 1.25rem; }
 h2 { font-size: 1.05rem; }
 .coach-live { margin: 20px 0; padding: 16px; border-left: 3px solid var(--gold-deep); background: #151f1d; color: #c6d0cc; line-height: 1.55; font-size: .9rem; }
+.practice-summary { margin: -7px 0 20px; padding: 12px 14px; border: 1px solid rgba(240,201,107,.26); border-radius: 9px; background: rgba(240,201,107,.06); }
+.practice-summary strong { display: block; color: var(--gold); font-size: .82rem; }
+.practice-summary span { display: block; margin-top: 4px; color: var(--muted); font-size: .76rem; }
 .review { margin-top: 20px; }
 .review-title, .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .review-title span, .section-heading span { color: var(--muted); font-size: .75rem; }
@@ -103,6 +109,12 @@ h2 { font-size: 1.05rem; }
 dialog { width: min(520px, calc(100% - 32px)); padding: 0; color: var(--ink); border: 1px solid #806b3e; border-radius: 14px; background: #101817; box-shadow: 0 25px 90px #000; }
 dialog::backdrop { background: #020706cc; backdrop-filter: blur(4px); }
 .dialog-card { padding: 28px; }.dialog-card h2 { margin: 7px 0 18px; font-size: 1.7rem; }.dialog-card li { margin: 9px 0; color: #c5cfcb; line-height: 1.45; }.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.dialog-intro { margin: -7px 0 20px; color: var(--muted); line-height: 1.5; }
+.practice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.practice-grid label { display: grid; gap: 7px; color: #c4cec9; font-size: .78rem; font-weight: 700; }
+.practice-grid label:first-child { grid-column: 1 / -1; }
+.practice-grid select { width: 100%; padding: 10px 12px; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; background: #182220; }
+.practice-grid select:disabled { opacity: .55; }
 
 @media (max-width: 1050px) {
   main { grid-template-columns: 1fr; }
@@ -110,8 +122,8 @@ dialog::backdrop { background: #020706cc; backdrop-filter: blur(4px); }
   .table-wrap { min-height: 570px; }
 }
 @media (max-width: 720px) {
-  .topbar { height: auto; padding: 12px 15px; flex-wrap: wrap; gap: 12px; }.session-stats { order: 3; width: 100%; justify-content: center; }.ghost-button { margin-left: auto; }
+  .topbar { height: auto; padding: 12px 15px; flex-wrap: wrap; gap: 12px; }.mode-switch { order: 3; }.session-stats { order: 4; width: 100%; justify-content: center; }.ghost-button { margin-left: auto; }
   main { min-height: 0; }.table-wrap { min-height: 520px; padding: 80px 8px 60px; overflow: hidden; }.poker-table { width: 88%; min-width: 430px; transform: scale(.78); }
   .action-strip { grid-template-columns: 1fr; gap: 14px; padding: 18px 15px; }.action-buttons { display: grid; grid-template-columns: repeat(3, 1fr); }.action { min-width: 0; padding: 12px 8px; }
-  .coach-panel { padding: 24px 16px; }.seat { width: 132px; }
+  .coach-panel { padding: 24px 16px; }.seat { width: 132px; }.practice-grid { grid-template-columns: 1fr; }.practice-grid label:first-child { grid-column: auto; }
 }

@@ -11,9 +11,13 @@
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-mark">♠</span><span>Poker Trainer</span></div>
+    <nav class="mode-switch" aria-label="Game mode">
+      <button id="cash-mode" class="mode-button active" type="button" aria-pressed="true">Cash game</button>
+      <button id="practice-mode" class="mode-button" type="button" aria-pressed="false">Practice</button>
+    </nav>
     <div class="session-stats" aria-label="Session statistics">
-      <span>Hands <strong id="hands-played">0</strong></span>
-      <span>Result <strong id="session-result">+$0</strong></span>
+      <span><span id="hands-label">Hands</span> <strong id="hands-played">0</strong></span>
+      <span id="result-stat"><span id="result-label">Result</span> <strong id="session-result">+$0</strong></span>
     </div>
     <button class="ghost-button" id="new-session">New session</button>
   </header>
@@ -64,13 +68,14 @@
       <div class="coach-live" id="coach-live">
         <p>I’ll keep recommendations hidden while you’re deciding. After the hand, I’ll break down the spots that mattered.</p>
       </div>
+      <div class="practice-summary hidden" id="practice-summary"></div>
       <div class="review hidden" id="review">
-        <div class="review-title"><h2>Hand review</h2><span id="hand-result"></span></div>
+        <div class="review-title"><h2 id="review-title-label">Hand review</h2><span id="hand-result"></span></div>
         <div id="decision-list" class="decision-list"></div>
         <button class="deal-button" id="next-hand">Deal next hand</button>
       </div>
       <div class="tendencies">
-        <div class="section-heading"><h2>Session tendencies</h2><span id="decision-count">0 decisions</span></div>
+        <div class="section-heading"><h2 id="tendency-title">Session tendencies</h2><span id="decision-count">0 decisions</span></div>
         <div id="tendency-list" class="tendency-list"><p class="muted">Patterns will appear as you play.</p></div>
       </div>
     </aside>
@@ -83,6 +88,56 @@
       <div id="session-report"></div>
       <div class="dialog-actions"><button id="keep-playing" class="secondary action">Keep playing</button><button id="reset-session" class="primary action">Start fresh</button></div>
     </div>
+  </dialog>
+
+  <dialog id="practice-dialog">
+    <form class="dialog-card" id="practice-form">
+      <span class="eyebrow">PRACTICE MODE</span>
+      <h2>Choose a situation</h2>
+      <p class="dialog-intro">Build a focused spot, make your decision without seeing the answer, then get immediate coaching.</p>
+      <div class="practice-grid">
+        <label>Situation
+          <select id="practice-drill">
+            <option value="position">Preflop position play</option>
+            <option value="value">Strong hand &amp; value betting</option>
+            <option value="bluff">Bluff or give up?</option>
+          </select>
+        </label>
+        <label>Your position
+          <select id="practice-position">
+            <option value="random">Random</option>
+            <option value="utg">Under the gun</option>
+            <option value="mp">Middle position</option>
+            <option value="co">Cutoff</option>
+            <option value="btn">Button</option>
+            <option value="sb">Small blind</option>
+            <option value="bb">Big blind</option>
+          </select>
+        </label>
+        <label>Decision street
+          <select id="practice-street">
+            <option value="preflop">Preflop</option>
+            <option value="flop">Flop</option>
+            <option value="turn">Turn</option>
+            <option value="river">River</option>
+          </select>
+        </label>
+        <label>Stack depth
+          <select id="practice-stack">
+            <option value="50">50 big blinds</option>
+            <option value="100" selected>100 big blinds</option>
+            <option value="200">200 big blinds</option>
+          </select>
+        </label>
+        <label>Coaching level
+          <select id="practice-difficulty">
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+          </select>
+        </label>
+      </div>
+      <div class="dialog-actions"><button id="cancel-practice" type="button" class="secondary action">Cancel</button><button type="submit" class="primary action">Start practice</button></div>
+    </form>
   </dialog>
 
   <script type="module" src="game.js"></script>
