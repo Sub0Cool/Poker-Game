@@ -225,12 +225,29 @@ function startPracticeScenario() {
     objective = "Choose a sound preflop action from your selected position.";
     detail = facingRaise ? "You are facing an opening raise." : "The action has reached you with no raise yet.";
     state.scenario = { drill: config.drill, position, category, facingRaise, objective, detail };
+  } else if (config.street === "preflop") {
+    const valueDrill = config.drill === "value";
+    const bluffPlan = Math.random() < .55 ? "bluff" : "giveup";
+    heroHand = valueDrill ? pick(positionHands.strong) : pick(positionHands[bluffPlan === "bluff" ? "medium" : "weak"]);
+    state.street = "preflop";
+    postBlind(state.smallBlind, 1); postBlind(state.bigBlind, BB);
+    const facingRaise = config.difficulty === "intermediate" ? Math.random() < .6 : Math.random() < .35;
+    if (facingRaise) {
+      const raiser = state.players[3];
+      const extra = Math.max(0, 6 - raiser.streetBet);
+      commit(raiser, extra);
+      raiser.lastAction = `Raise to ${money(6)}`;
+      state.currentBet = 6;
+    } else state.currentBet = BB;
+    objective = valueDrill ? "Decide how to build value with a premium starting hand." : "Decide whether this starting hand is a credible preflop bluff or a fold.";
+    detail = facingRaise ? "You are facing an opening raise." : "The action has reached you with no raise yet.";
+    state.scenario = { drill: config.drill, position, plan: valueDrill ? undefined : bluffPlan, handNote: valueDrill ? "a premium starting hand" : bluffPlan === "bluff" ? "playable blockers or useful preflop potential" : "weak blockers and limited playability", facingBet: facingRaise, objective, detail };
   } else {
     const template = pick(config.drill === "value" ? valueScenarios : bluffScenarios);
     heroHand = template.hand;
     const boardCount = { flop: 3, turn: 4, river: 5 }[config.street] || 3;
     board = template.board.slice(0, boardCount);
-    state.street = config.street === "preflop" ? "flop" : config.street;
+    state.street = config.street;
     state.board = board;
     const villain = state.players[3];
     for (const p of state.players.slice(1)) p.folded = p !== villain;
