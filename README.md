@@ -28,6 +28,8 @@ If npm is installed, the equivalent shortcuts are `npm start` and `npm test`.
 - Preflop, flop, turn, and river betting with fold, check, call, bet, raise, and all-in handling
 - Seven-card hand evaluation, side pots, and split pots
 - Five opponents with different loose/tight and passive/aggressive tendencies
+- A separate Practice Mode for preflop position play, value betting, and bluff-or-give-up decisions
+- Selectable position, street, stack depth, and beginner/intermediate coaching level for focused scenarios
 - Decision reviews that consider hand strength, position, pot odds, estimated equity, sizing, and aggression
 - Session-level tendency tracking and a concise coaching report
 
